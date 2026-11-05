@@ -22,12 +22,13 @@ import (
 	"go.opentelemetry.io/ebpf-profiler/metrics"
 	"go.opentelemetry.io/ebpf-profiler/rlimit"
 	"go.opentelemetry.io/ebpf-profiler/support"
+	"go.opentelemetry.io/ebpf-profiler/support/ebpfloader"
 )
 
 func loadTracers(t *testing.T) *ebpfMapsImpl {
 	t.Helper()
 
-	coll, err := support.LoadCollectionSpec()
+	coll, err := ebpfloader.LoadCollectionSpec()
 	require.NoError(t, err)
 
 	restoreRlimit, err := rlimit.MaximizeMemlock()

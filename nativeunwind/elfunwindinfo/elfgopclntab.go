@@ -701,7 +701,18 @@ func getSourceFileStrategyX86(sourceFile string) strategy {
 }
 
 // getFunctionDelta determines the special unwind opcode if needed
-func getFunctionUnwindInfo(sourceFile string, arch elf.Machine, useFP bool) *sdtypes.UnwindInfo {
+func getFunctionUnwindInfo(sourceFile string, arch elf.Machine, useFP bool,
+	options ExtractionOptions) *sdtypes.UnwindInfo {
+	if options.DisableGoStackSwitch {
+		switch sourceFile {
+		case "runtime.morestack":
+			return nil // Decode the existing PC/SP table instead of issuing a Go command.
+		case "runtime.asmcgocall":
+			if arch == elf.EM_AARCH64 {
+				return &sdtypes.UnwindInfoStop
+			}
+		}
+	}
 	unwindInfoFramePointerOrStop := &sdtypes.UnwindInfoStop
 	unwindInfoGoAsmcgocallOrStop := &sdtypes.UnwindInfoStop
 	unwindInfoGoMorestackOrStop := &sdtypes.UnwindInfoStop
@@ -825,14 +836,14 @@ func resolveCUStrategies(r io.ReaderAt, g *Gopclntab,
 	return cuStrategy, nil
 }
 
-func resolveFunctionUnwindInfo(r io.ReaderAt, g *Gopclntab, arch elf.Machine, useFP bool) (map[int32]*sdtypes.UnwindInfo, error) {
+func resolveFunctionUnwindInfo(r io.ReaderAt, g *Gopclntab, arch elf.Machine, useFP bool, options ExtractionOptions) (map[int32]*sdtypes.UnwindInfo, error) {
 	rdr := pfbufio.GetReader()
 	defer pfbufio.PutReader(rdr)
 
 	functionInfo := make(map[int32]*sdtypes.UnwindInfo)
 	rdr.Init(r, g.headerOffset+int64(g.funcnameOffset), int64(g.cuOffset-g.funcnameOffset))
 	err := rdr.WalkAllStrings(func(offs int64, funcName string) error {
-		if info := getFunctionUnwindInfo(funcName, arch, useFP); info != nil {
+		if info := getFunctionUnwindInfo(funcName, arch, useFP, options); info != nil {
 			functionInfo[int32(offs)] = info
 		}
 		return nil
@@ -896,7 +907,7 @@ func (ee *elfExtractor) parseGoPclntab() error {
 		return fmt.Errorf("unsupported ELF architecture (%x)", arch)
 	}
 
-	funcUnwindInfo, err := resolveFunctionUnwindInfo(ee.file.Underlying(), g, arch, useFP)
+	funcUnwindInfo, err := resolveFunctionUnwindInfo(ee.file.Underlying(), g, arch, useFP, ee.options)
 	if err != nil {
 		return fmt.Errorf("funcnametab: %v", err)
 	}

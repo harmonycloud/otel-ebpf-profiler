@@ -71,6 +71,15 @@ func (f *extractionFilter) golangHook(start, end uintptr) {
 	f.golangFrames = true
 }
 
+// ExtractionOptions selects optional unwind commands supported by the consumer.
+// The zero value preserves the complete profiler's default extraction behavior.
+type ExtractionOptions struct {
+	// DisableGoStackSwitch avoids commands that require Go runtime context in BPF.
+	// With this option set, morestack uses its PC/SP rules and arm64 asmcgocall
+	// terminates the stack, matching consumers without a Go stack-switch unwinder.
+	DisableGoStackSwitch bool
+}
+
 // elfExtractor is the main context for parsing stack deltas from an ELF
 type elfExtractor struct {
 	ref  *pfelf.Reference
@@ -79,6 +88,7 @@ type elfExtractor struct {
 	hooks ehframeHooks
 
 	intervals *sdtypes.IntervalData
+	options   ExtractionOptions
 
 	// allowGenericRegs enables generation of unwinding using specific general purpose
 	// registers as CFA base. This is possible for code that does not call into other
@@ -148,21 +158,28 @@ func detectEntry(ef *pfelf.File) int {
 // ExtractELF takes a pfelf.Reference and provides the stack delta
 // intervals for it in the interval parameter.
 func ExtractELF(elfRef *pfelf.Reference) (*sdtypes.IntervalData, error) {
+	return ExtractELFWithOptions(elfRef, ExtractionOptions{})
+}
+
+// ExtractELFWithOptions extracts rules for consumers with a different set of
+// supported unwind commands. ELF parsing and validation are shared with ExtractELF.
+func ExtractELFWithOptions(elfRef *pfelf.Reference, options ExtractionOptions) (*sdtypes.IntervalData, error) {
 	elfFile, err := elfRef.GetELF()
 	if err != nil {
 		return nil, err
 	}
-	return extractFile(elfFile, elfRef)
+	return extractFile(elfFile, elfRef, options)
 }
 
 // extractFile extracts the elfFile stack deltas and uses the optional elfRef to resolve
 // debug link references if needed.
-func extractFile(elfFile *pfelf.File, elfRef *pfelf.Reference) (*sdtypes.IntervalData, error) {
+func extractFile(elfFile *pfelf.File, elfRef *pfelf.Reference, options ExtractionOptions) (*sdtypes.IntervalData, error) {
 	// Parse the stack deltas from the ELF
 	intervals := &sdtypes.IntervalData{}
 	filter := extractionFilter{}
 	ee := elfExtractor{
 		ref:              elfRef,
+		options:          options,
 		file:             elfFile,
 		intervals:        intervals,
 		hooks:            &filter,

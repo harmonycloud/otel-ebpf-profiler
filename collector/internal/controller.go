@@ -19,7 +19,7 @@ import (
 	"go.opentelemetry.io/ebpf-profiler/collector/internal/metadata"
 	"go.opentelemetry.io/ebpf-profiler/internal/controller"
 	"go.opentelemetry.io/ebpf-profiler/internal/log"
-	"go.opentelemetry.io/ebpf-profiler/metrics"
+	otelmetrics "go.opentelemetry.io/ebpf-profiler/metrics/otel"
 	"go.opentelemetry.io/ebpf-profiler/reporter"
 	"go.opentelemetry.io/ebpf-profiler/times"
 	"go.opentelemetry.io/ebpf-profiler/tracer"
@@ -93,7 +93,7 @@ func NewController(cfg *controller.Config, rs receiver.Settings,
 
 	// Provide internal metrics via the collectors telemetry.
 	meter := rs.MeterProvider.Meter(metadata.ScopeName)
-	metrics.Start(meter)
+	otelmetrics.Start(meter)
 
 	return &Controller{
 		onShutdown:   cfg.OnShutdown,

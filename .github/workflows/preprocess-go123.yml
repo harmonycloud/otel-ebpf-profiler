@@ -1,0 +1,46 @@
+name: Preprocessing library compatibility
+
+on:
+  push:
+    branches: [kindling-preprocess-go123]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  preprocess:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        go: ["1.23.0", "1.23.7"]
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: ${{ matrix.go }}
+          cache-dependency-path: |
+            go.sum
+            integrationtests/preprocess/go.sum
+      - name: Test library on the selected toolchain
+        run: make test-preprocess GO_FLAGS=-mod=readonly
+      - name: Check library races
+        if: matrix.go == '1.23.7'
+        run: make test-preprocess CGO_ENABLED=1 GO_FLAGS='-race -mod=readonly'
+      - name: Check SDK-free preprocessing imports
+        run: |
+          go list -mod=readonly -deps ./libpf/pfelf ./nativeunwind/elfunwindinfo ./libc | awk '
+            /^go.opentelemetry.io\/(otel|collector)(\/|$)|^github.com\/cilium\/ebpf/ {
+              print "unexpected preprocessing dependency: " $0; found=1
+            }
+            END { exit found }
+          '
+      - name: Build preprocessing for arm64
+        run: GOARCH=arm64 CGO_ENABLED=0 go build -mod=readonly ./libpf/pfelf ./nativeunwind/elfunwindinfo ./libc
+      - name: Verify coexistence with the legacy OTel SDK
+        working-directory: integrationtests/preprocess
+        run: go test -mod=readonly ./...

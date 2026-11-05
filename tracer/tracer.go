@@ -45,6 +45,7 @@ import (
 	"go.opentelemetry.io/ebpf-profiler/reporter"
 	"go.opentelemetry.io/ebpf-profiler/rlimit"
 	"go.opentelemetry.io/ebpf-profiler/support"
+	"go.opentelemetry.io/ebpf-profiler/support/ebpfloader"
 	"go.opentelemetry.io/ebpf-profiler/times"
 	"go.opentelemetry.io/ebpf-profiler/util"
 )
@@ -458,7 +459,7 @@ func initializeMapsAndPrograms(kmod *kallsyms.Module, cfg *Config, origins *orig
 		return nil, nil, nil, fmt.Errorf("failed to get kernel version: %v", err)
 	}
 
-	coll, err := support.LoadCollectionSpec()
+	coll, err := ebpfloader.LoadCollectionSpec()
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to load specification for tracers: %v", err)
 	}

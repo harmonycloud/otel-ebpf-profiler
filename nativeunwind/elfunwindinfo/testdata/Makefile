@@ -9,6 +9,7 @@ BINARIES=helloworld \
 
 # Use the default go executable if it is not specified otherwise.
 GO_BINARY ?= go
+EXTERNAL_GOTOOLCHAIN ?= go1.26.7
 
 all: $(BINARIES)
 
@@ -28,7 +29,7 @@ helloworld.arm64:
 	GOARCH=arm64 $(GO_BINARY) build -o $@ helloworld.go
 
 helloworld.linkexternal:
-	CGO_ENABLED=1 GOTOOLCHAIN=go1.26.7 $(GO_BINARY) build -ldflags="-linkmode=external" -o $@ helloworld.go
+	CGO_ENABLED=1 GOTOOLCHAIN=$(EXTERNAL_GOTOOLCHAIN) $(GO_BINARY) build -ldflags="-linkmode=external" -o $@ helloworld.go
 
 helloworld.linkexternal.stripped: helloworld.linkexternal
 	objcopy -S $< $@

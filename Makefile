@@ -5,7 +5,7 @@
 	processctx-execs host-integration-tests \
 	pprof_1_23 pprof_1_24 pprof_1_24_cgo otelcol-ebpf-profiler \
 	rust-components rust-targets rust-tests vanity-import-check vanity-import-fix \
-	otel-from-tree otel-from-lib
+	otel-from-tree otel-from-lib test-preprocess test-preprocess-fixtures
 
 SHELL := /usr/bin/env bash
 
@@ -40,6 +40,12 @@ BRANCH = $(shell git branch --show-current)
 GO_TAGS := osusergo,netgo
 # Some github action test job matrix entries pass GO_FLAGS=-race
 GO_FLAGS ?=
+# The default module is the Go 1.23 preprocessing library. Runtime-only tools
+# and the complete profiler use the original upstream dependency manifest.
+GO_PROFILER_FLAGS := -modfile=profiler.mod
+PREPROCESS_PACKAGES := ./libpf/... ./nativeunwind/... ./libc/... ./asm/... \
+	./remotememory/... ./metrics ./lpm ./stringutil ./nopanicslicereader \
+	./util ./support ./successfailurecounter
 EBPF_FLAGS :=
 
 GO_TOOLS := -modfile=internal/tools/go.mod
@@ -61,7 +67,7 @@ clean:
 	@cargo clean
 
 generate:
-	GOARCH=$(NATIVE_ARCH) go generate ./...
+	GOARCH=$(NATIVE_ARCH) go generate $(GO_PROFILER_FLAGS) ./...
 	(cd support && ./generate.sh)
 
 ebpf: generate
@@ -105,7 +111,7 @@ lint: generate vanity-import-check pprof-execs
 	$(MAKE) lint -C support/ebpf
 	go tool $(GO_TOOLS) golangci-lint config verify
 	# tools/coredump tests require CGO_ENABLED
-	CGO_ENABLED=1 go tool $(GO_TOOLS) golangci-lint run --max-issues-per-linter -1 --max-same-issues -1
+	CGO_ENABLED=1 GOFLAGS="$(GO_PROFILER_FLAGS)" go tool $(GO_TOOLS) golangci-lint run --max-issues-per-linter -1 --max-same-issues -1
 
 format: format-go format-ebpf
 
@@ -123,7 +129,15 @@ vanity-import-fix:
 
 test: generate ebpf test-deps
 	# tools/coredump tests build ebpf C-code using CGO to test it against coredumps
-	CGO_ENABLED=1 go test $(GO_FLAGS) -tags $(GO_TAGS) ./...
+	CGO_ENABLED=1 go test $(GO_PROFILER_FLAGS) $(GO_FLAGS) -tags $(GO_TAGS) ./...
+
+# This target never downloads a newer toolchain for a preprocessing fixture.
+test-preprocess-fixtures:
+	GOTOOLCHAIN=local $(MAKE) -C nativeunwind/elfunwindinfo/testdata EXTERNAL_GOTOOLCHAIN=local
+	GOTOOLCHAIN=local $(MAKE) -C libpf/pfelf/testdata
+
+test-preprocess: test-preprocess-fixtures
+	GOTOOLCHAIN=local go test $(GO_FLAGS) $(PREPROCESS_PACKAGES)
 
 # Lives in its own module to keep heavy dependencies (testcontainers,
 # Docker, etc.) out of the main go.mod.
@@ -132,7 +146,7 @@ test-luajit-offsets: generate
 
 test-junit: generate ebpf test-deps
 	mkdir -p $(JUNIT_OUT_DIR)
-	CGO_ENABLED=1 go tool $(GO_TOOLS) gotestsum --junitfile $(JUNIT_OUT_DIR)/junit.xml -- $(GO_FLAGS) -tags $(GO_TAGS) ./...
+	CGO_ENABLED=1 go tool $(GO_TOOLS) gotestsum --junitfile $(JUNIT_OUT_DIR)/junit.xml -- $(GO_PROFILER_FLAGS) $(GO_FLAGS) -tags $(GO_TAGS) ./...
 
 TESTDATA_DIRS:= \
 	nativeunwind/elfunwindinfo/testdata \
@@ -154,7 +168,7 @@ processctx-execs:
 # Host-only: the qemu initramfs cannot load shared libraries, which the
 # lib/dlopen testdata variants will need.
 host-integration-tests: processctx-execs
-	go test -exec sudo -v -tags host_integration ./process/processcontext/integrationtests/
+	go test $(GO_PROFILER_FLAGS) -exec sudo -v -tags host_integration ./process/processcontext/integrationtests/
 
 pprof-execs: pprof_1_23 pprof_1_24 pprof_1_24_cgo pprof_1_24_cgo_pie pprof_stable pprof_stable_buildinfo_cgo pprof_stable_cgo pprof_stable_cgo_pie
 
@@ -184,7 +198,7 @@ pprof_stable_cgo_pie:
 
 integration-test-binaries: generate ebpf pprof-execs
 	$(foreach test_name, $(TEST_INTEGRATION_BINARY_DIRS), \
-		(go test -ldflags='-extldflags=-static' -trimpath -c \
+		(go test $(GO_PROFILER_FLAGS) -ldflags='-extldflags=-static' -trimpath -c \
 			-tags $(GO_TAGS),static_build,integration \
 			-o ./support/$(subst /,_,$(test_name)).test \
 			./$(test_name)) || exit ; \
@@ -202,13 +216,13 @@ agent:
 # dependency pulled in by go.opentelemetry.io/collector/featuregate, not
 # something this project imports directly.
 license-check:
-	go tool $(GO_TOOLS) go-licenses check \
+	GOFLAGS="$(GO_PROFILER_FLAGS)" go tool $(GO_TOOLS) go-licenses check \
 		--allowed_licenses=Apache-2.0,0BSD,BSD-2-Clause,BSD-2-Clause-FreeBSD,BSD-3-Clause,MIT,MIT-0,ISC,OpenSSL,PSF-2.0,Python-2.0,Python-2.0.1,PostgreSQL,UPL-1.0,X11,Zlib \
 		--ignore github.com/hashicorp/go-version \
 		./...
 
 license-save:
-	go tool $(GO_TOOLS) go-licenses save --force ./... --save_path=LICENSES
+	GOFLAGS="$(GO_PROFILER_FLAGS)" go tool $(GO_TOOLS) go-licenses save --force ./... --save_path=LICENSES
 
 codespell:
 	@codespell

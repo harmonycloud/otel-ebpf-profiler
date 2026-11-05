@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sys/unix"
 
-	"go.opentelemetry.io/ebpf-profiler/support"
+	"go.opentelemetry.io/ebpf-profiler/support/ebpfloader"
 )
 
 func TestReadCPURange(t *testing.T) {
@@ -130,7 +130,7 @@ func TestDisableVMAHelperCalls(t *testing.T) {
 }
 
 func TestDisableVMAHelperCallsOnEmbeddedCollection(t *testing.T) {
-	coll, err := support.LoadCollectionSpec()
+	coll, err := ebpfloader.LoadCollectionSpec()
 	require.NoError(t, err)
 
 	require.NotZero(t, disableVMAHelperCalls(coll))

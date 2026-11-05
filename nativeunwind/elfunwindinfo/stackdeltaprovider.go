@@ -17,6 +17,7 @@ import (
 // ELFStackDeltaProvider extracts stack deltas from ELF executables available
 // via the pfelf.File interface.
 type ELFStackDeltaProvider struct {
+	options ExtractionOptions
 	// Metrics
 	successCount         atomic.Uint64
 	extractionErrorCount atomic.Uint64
@@ -27,12 +28,17 @@ var _ nativeunwind.StackDeltaProvider = (*ELFStackDeltaProvider)(nil)
 
 // NewStackDeltaProvider creates a stack delta provider using the ELF eh_frame extraction.
 func NewStackDeltaProvider() nativeunwind.StackDeltaProvider {
-	return &ELFStackDeltaProvider{}
+	return NewStackDeltaProviderWithOptions(ExtractionOptions{})
+}
+
+// NewStackDeltaProviderWithOptions creates a provider for the selected consumer capabilities.
+func NewStackDeltaProviderWithOptions(options ExtractionOptions) nativeunwind.StackDeltaProvider {
+	return &ELFStackDeltaProvider{options: options}
 }
 
 // GetIntervalStructuresForFile builds the stack delta information for a single executable.
 func (provider *ELFStackDeltaProvider) GetIntervalDataForFile(elfRef *pfelf.Reference) (*sdtypes.IntervalData, error) {
-	interval, err := ExtractELF(elfRef)
+	interval, err := ExtractELFWithOptions(elfRef, provider.options)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			provider.extractionErrorCount.Add(1)

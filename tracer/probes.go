@@ -13,7 +13,7 @@ import (
 	"go.opentelemetry.io/ebpf-profiler/libpf"
 	pm "go.opentelemetry.io/ebpf-profiler/processmanager"
 	"go.opentelemetry.io/ebpf-profiler/reporter/samples"
-	"go.opentelemetry.io/ebpf-profiler/support"
+	"go.opentelemetry.io/ebpf-profiler/support/ebpfloader"
 )
 
 // ProbeContext bundles the tracer's shared state and provides helpers for building eBPF
@@ -43,7 +43,7 @@ func (c *ProbeContext) CollectionSpecWith(
 	extraProgs []string,
 	extraVars []string,
 ) (*cebpf.CollectionSpec, error) {
-	full, err := support.LoadCollectionSpec()
+	full, err := ebpfloader.LoadCollectionSpec()
 	if err != nil {
 		return nil, fmt.Errorf("loading collection spec: %w", err)
 	}

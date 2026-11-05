@@ -24,13 +24,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"go.opentelemetry.io/otel/metric/noop"
-
 	"go.opentelemetry.io/ebpf-profiler/interpreter/interpreterconfig"
 	"go.opentelemetry.io/ebpf-profiler/libpf"
 	"go.opentelemetry.io/ebpf-profiler/metrics"
 	"go.opentelemetry.io/ebpf-profiler/rlimit"
-	"go.opentelemetry.io/ebpf-profiler/support"
+	"go.opentelemetry.io/ebpf-profiler/support/ebpfloader"
 	"go.opentelemetry.io/ebpf-profiler/tracer"
 )
 
@@ -61,7 +59,7 @@ func TestMain(m *testing.M) {
 
 	// Initialize metrics once to avoid concurrent map access between
 	// metrics.Start() and metrics.AddSlice() called from lingering periodiccaller goroutines.
-	metrics.Start(noop.Meter{})
+	metrics.Start(nil)
 	os.Exit(m.Run())
 }
 
@@ -90,7 +88,7 @@ func forceContextSwitch() {
 
 func attachKernelFrameProbe(t *testing.T, tr *tracer.Tracer) link.Link {
 	t.Helper()
-	coll, err := support.LoadCollectionSpec()
+	coll, err := ebpfloader.LoadCollectionSpec()
 	require.NoError(t, err)
 
 	err = tracer.RewriteMaps(coll, tr.GetEbpfMaps())

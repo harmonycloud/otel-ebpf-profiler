@@ -1,3 +1,9 @@
+# Kindling preprocessing fork
+
+This fork exposes the upstream preprocessing packages with Go 1.23-compatible
+dependencies. See [PREPROCESSING.md](PREPROCESSING.md) for scope, upstream provenance,
+library tests, and the separate dependency manifest for the complete profiler.
+
 # OpenTelemetry eBPF Profiler
 
 This repository implements a whole-system, cross-language profiler for Linux via

@@ -86,6 +86,10 @@ func TestTraceHashCustomLabels(t *testing.T) {
 			Intern("first"):  Intern("two"),
 			Intern("second"): Intern("one"),
 		}},
+		"ambiguous concatenation": {labels: map[String]String{
+			Intern("firsto"): Intern("ne"),
+			Intern("second"): Intern("two"),
+		}},
 		"missing label": {labels: map[String]String{
 			Intern("first"): Intern("one"),
 		}},

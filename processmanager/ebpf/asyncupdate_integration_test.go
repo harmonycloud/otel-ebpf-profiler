@@ -14,7 +14,7 @@ import (
 
 	"go.opentelemetry.io/ebpf-profiler/host"
 	"go.opentelemetry.io/ebpf-profiler/rlimit"
-	"go.opentelemetry.io/ebpf-profiler/support"
+	"go.opentelemetry.io/ebpf-profiler/support/ebpfloader"
 
 	"github.com/stretchr/testify/require"
 )
@@ -22,7 +22,7 @@ import (
 func prepareMapInMap(t *testing.T) *ebpf.Map {
 	t.Helper()
 
-	coll, err := support.LoadCollectionSpec()
+	coll, err := ebpfloader.LoadCollectionSpec()
 	require.NoError(t, err)
 	outerMapSpec := coll.Maps["exe_id_to_8_stack_deltas"]
 

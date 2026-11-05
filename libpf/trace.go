@@ -182,9 +182,18 @@ func (t *Trace) Hash() TraceHash {
 	}
 	if len(t.CustomLabels) > 0 {
 		var labelsHash uint64
+		var labelHash maphash.Hash
+		labelHash.SetSeed(customLabelHashSeed)
 		// XOR makes label order irrelevant; map keys are unique.
 		for key, value := range t.CustomLabels {
-			labelsHash ^= maphash.Comparable(customLabelHashSeed, [2]String{key, value})
+			labelHash.Reset()
+			// Length-prefix the key so ("a", "bc") differs from ("ab", "c").
+			// Hash bytes rather than handles; maphash.Comparable requires Go 1.24.
+			binary.LittleEndian.PutUint64(buf[:8], uint64(len(key.String())))
+			_, _ = labelHash.Write(buf[:8])
+			_, _ = labelHash.WriteString(key.String())
+			_, _ = labelHash.WriteString(value.String())
+			labelsHash ^= labelHash.Sum64()
 		}
 		binary.LittleEndian.PutUint64(buf[:8], labelsHash)
 		_, _ = h.Write(buf[:8])

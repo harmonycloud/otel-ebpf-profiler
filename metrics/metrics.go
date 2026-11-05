@@ -5,7 +5,6 @@ package metrics // import "go.opentelemetry.io/ebpf-profiler/metrics"
 
 import (
 	"bytes"
-	"context"
 	_ "embed"
 	"encoding/json"
 	"fmt"
@@ -13,13 +12,10 @@ import (
 	"time"
 
 	"go.opentelemetry.io/ebpf-profiler/internal/log"
-
-	"go.opentelemetry.io/otel/metric"
-	"go.opentelemetry.io/otel/metric/noop"
 )
 
 var (
-	// metricsProviderConfigured indicates if Start() was called with a real (non-noop) metric meter.
+	// metricsProviderConfigured indicates whether a reporting callback is installed.
 	metricsProviderConfigured bool
 
 	// prevTimestamp holds the timestamp of the buffered metrics
@@ -44,79 +40,35 @@ var (
 	// Used in fallback checks, e.g. to avoid sending "counters" with 0 values
 	metricTypes map[MetricID]MetricType
 
-	// OTel metric instrumentation
-	counters = map[MetricID]metric.Int64Counter{}
-	gauges   = map[MetricID]metric.Int64Gauge{}
+	// reporter consumes a batch synchronously while mutex is held.
+	reporter func([]Metric)
 )
 
-// Enabled reports whether a real (non-noop) metric meter was provided to Start().
+// Enabled reports whether a reporting callback was provided to Start.
 func Enabled() bool { return metricsProviderConfigured }
 
-// Start initializes the OTel metric instruments for a predefined set of
-// metric definitions. It must be called before any goroutine begins
-// calling AddSlice or Add.
-func Start(meter metric.Meter) {
-	_, enabled := any(meter).(noop.Meter)
-	metricsProviderConfigured = !enabled
-
-	defs := GetDefinitions()
-	metricTypes = make(map[MetricID]MetricType, len(defs))
-	for _, md := range defs {
-		if md.Obsolete || md.Field == "" {
-			continue
-		}
-		metricTypes[md.ID] = md.Type
-
-		if !metricsProviderConfigured {
-			continue
-		}
-
-		switch typ := md.Type; typ {
-		case MetricTypeCounter:
-			counter, err := meter.Int64Counter(md.Field,
-				metric.WithDescription(md.Description),
-				metric.WithUnit(md.Unit))
-			if err != nil {
-				log.Errorf("Creating Int64Counter: %v", err)
-				continue
-			}
-			counters[md.ID] = counter
-		case MetricTypeGauge:
-			gauge, err := meter.Int64Gauge(md.Field,
-				metric.WithDescription(md.Description),
-				metric.WithUnit(md.Unit))
-			if err != nil {
-				log.Errorf("Creating Int64Gauge: %v", err)
-				continue
-			}
-			gauges[md.ID] = gauge
-		default:
-			panic(fmt.Sprintf("Unknown metric type: %v", typ))
+// Start installs a synchronous reporting callback without depending on a metrics SDK.
+// A nil callback disables export. The callback must not retain the batch or call
+// Add/AddSlice. Call Start before starting any metric-producing goroutines.
+func Start(fn func([]Metric)) {
+	reporter = fn
+	metricsProviderConfigured = fn != nil
+	metricTypes = make(map[MetricID]MetricType)
+	for _, md := range GetDefinitions() {
+		if !md.Obsolete && md.Field != "" {
+			metricTypes[md.ID] = md.Type
 		}
 	}
 }
 
-// report converts and reports collected metrics via OTel metrics.
-// Allow for report to be overridden in the test.
+// Keep buffering, duplicate suppression and batch reset independent of export.
+// Tests may replace report to inspect the buffered batch.
 var report = func() {
-	ctx := context.Background()
-	for i := range nMetrics {
-		metric := metricsBuffer[i]
-		switch typ := metricTypes[metric.ID]; typ {
-		case MetricTypeCounter:
-			if counter, ok := counters[metric.ID]; ok {
-				counter.Add(ctx, int64(metric.Value))
-			}
-		case MetricTypeGauge:
-			if gauge, ok := gauges[metric.ID]; ok {
-				gauge.Record(ctx, int64(metric.Value))
-			}
-		}
+	if reporter != nil {
+		reporter(metricsBuffer[:nMetrics])
 	}
 	nMetrics = 0
-	for idx := range metricIDSet {
-		metricIDSet[idx] = 0
-	}
+	clear(metricIDSet)
 }
 
 // AddSlice takes a slice of metrics from a metric provider.

@@ -29,5 +29,5 @@ go-binary: gotest.go
 go-binary-no-buildinfo-section: go-binary
 	$(OBJCOPY) --rename-section .go.buildinfo=.go.buildinfo.hidden $< $@
 
-go-binary-no-sections: go-binary
-	$(STRIP) --strip-section-headers -o $@ $<
+go-binary-no-sections: go-binary strip_sections.go
+	go run strip_sections.go $< $@

@@ -95,7 +95,7 @@ func TestGoVersion(t *testing.T) {
 	defer ef.Close()
 
 	vers := ef.GoVersion()
-	assert.GreaterOrEqual(t, version.Compare(vers, "go1.23.6"), 0)
+	assert.GreaterOrEqual(t, version.Compare(vers, "go1.23.0"), 0)
 
 	testEF := getPFELF(t, "/proc/self/exe")
 	defer testEF.Close()

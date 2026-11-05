@@ -15,7 +15,7 @@ import (
 )
 
 func BenchmarkPythonInterpreter(b *testing.B) {
-	for b.Loop() {
+	for i := 0; i < b.N; i++ {
 		testPythonInterpreter(b)
 	}
 }
